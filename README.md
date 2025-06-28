@@ -13,6 +13,9 @@
 # instructions
 please install above libraries then run using
 
+    - config api keys in env
+    - do not change ALGORITHM value
+
 cmd =>
     - fastapi dev main.py
     - uvicorn main:app --reload 
