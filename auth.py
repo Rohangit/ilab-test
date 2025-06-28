@@ -28,10 +28,10 @@ ALGORITHM = os.getenv("ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 
 bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_bearer = OAuth2PasswordBearer(tokenUrl="auth/token")
+oauth2_bearer = OAuth2PasswordBearer(tokenUrl="auth/create-token")
 
 class CreateUserRequest(BaseModel):
-    email:str
+    username:str
     password:str
 
 class Token(BaseModel):
@@ -51,15 +51,15 @@ db_dependency = Annotated[Session, Depends(get_db)]
 @router.post("/create-user", status_code=status.HTTP_201_CREATED)
 async def create_user(db: db_dependency, create_user_request: CreateUserRequest):
     try:
-        existing_user = db.query(User).filter(User.email == create_user_request.email).first()
+        existing_user = db.query(User).filter(User.username == create_user_request.username).first()
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="username already registered"
             )
         
         create_user_model = User(
-            email=create_user_request.email,
+            username=create_user_request.username,
             hashed_password=bcrypt_context.hash(create_user_request.password),
         )
         
@@ -78,14 +78,14 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
 # generate token
 # return token json format
 @router.post("/create-token", response_model=Token)
-async def create_token(create_user_request: CreateUserRequest, db: db_dependency):
+async def create_token(from_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: db_dependency):
     try:
-        user = authenticate_user(create_user_request.email, create_user_request.password, db)
+        user = authenticate_user(from_data.username, from_data.password, db)
 
         if not user:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="email or password error")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="username or password error")
         
-        token = create_access_token(user.email, user.id, timedelta(minutes=20))
+        token = create_access_token(user.username, user.id, timedelta(minutes=20))
 
         return {'access_token': token, 'token_type': 'bearer'}
     
@@ -97,8 +97,8 @@ async def create_token(create_user_request: CreateUserRequest, db: db_dependency
 
 # authenticate user
 # return bool or user object
-def authenticate_user(email:str, password:str, db):
-    user = db.query(User).filter(User.email == email).first()
+def authenticate_user(username:str, password:str, db):
+    user = db.query(User).filter(User.username == username).first()
 
     if not user:
         return False
@@ -108,8 +108,8 @@ def authenticate_user(email:str, password:str, db):
 
 # create jwt token
 # return jwt
-def create_access_token(email:str, user_id:str, expire_dt: timedelta):
-    encode = {'sub': email, 'id': user_id}
+def create_access_token(username:str, user_id:str, expire_dt: timedelta):
+    encode = {'sub': username, 'id': user_id}
     expires = datetime.utcnow() + expire_dt
     encode.update({'exp': expires})
     return jwt.encode(encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -118,13 +118,13 @@ def create_access_token(email:str, user_id:str, expire_dt: timedelta):
 async def validate_request(token: Annotated[str, Depends(oauth2_bearer)]):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get('sub')
+        username: str = payload.get('sub')
         user_id: int = payload.get('id')
         
-        if email is None or user_id is None:
+        if username is None or user_id is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not authenticate check token lifetime")
         
-        return {'email': email, 'id': user_id};
+        return {'username': username, 'id': user_id};
 
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not authenticate check token lifetime")

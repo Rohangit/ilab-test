@@ -8,6 +8,7 @@ from typing import Annotated
 from database import engine, SessionLocal
 import models
 import auth
+from auth import validate_request
 
 
 app = FastAPI()
@@ -23,7 +24,9 @@ def get_db():
     finally:
         db.close()
 
+# dependancies
 db_dependency = Annotated[Session, Depends(get_db)]
+user_dependancey = Annotated[dict, Depends(validate_request)]
 
 items = []
 
@@ -32,7 +35,7 @@ def read_root():
     return {"Project Name": "iLab Test", "Version": "1.0"}
 
 @app.get("/users", status_code=status.HTTP_200_OK)
-async def users(user:None, db: db_dependency):
+async def users(user:user_dependancey, db: db_dependency):
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not authenticate check token lifetime")
     return {"user": user}
