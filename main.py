@@ -47,25 +47,24 @@ async def users(user:user_dependancey, db: db_dependency):
     return {"user": user}
 
 # chat
-@app.post("/ask-ai", response_model=models.Prompt)
-def ask_ai(prompt: prompt.PromptCreate, db: Session = Depends(SessionLocal), user=Depends(auth.user_dependancey)):
-    if not rate_limiter.check_daily_limit(user.id, db):
+@app.post("/ask-ai", response_model=prompt.PromptOut)
+async def ask_ai(
+    user: user_dependancey,
+    prompt_data: prompt.PromptCreate,
+    db: db_dependency
+):
+    if not rate_limiter.check_daily_limit(user['id'], db):
         raise HTTPException(status_code=429, detail="Daily prompt limit reached")
-    ai_response = ai.query_openai(prompt.prompt)
-    record = models.Prompt(user_id=user.id, prompt=prompt.prompt, response=ai_response)
+
+    ai_response = ai.query_openai(prompt_data.prompt)
+
+    record = models.Prompt(
+        user_id=user['id'],
+        prompt=prompt_data.prompt,
+        response=ai_response
+    )
+
     db.add(record)
     db.commit()
     db.refresh(record)
     return record
-
-# history
-@app.get("/history", response_model=list[prompt.PromptOut])
-def get_history(db: Session = Depends(SessionLocal), user=Depends(auth.user_dependancey)):
-    prompts = db.query(models.Prompt).filter(models.Prompt.user_id == user.id).order_by(models.Prompt.timestamp.desc()).all()
-    return prompts
-
-# analytics
-@app.get("/analytics")
-def analytics(db: Session = Depends(SessionLocal), user=Depends(auth.user_dependancey)):
-    total = db.query(models.Prompt).filter(models.Prompt.user_id == user.id).count()
-    return {"total_requests": total}
