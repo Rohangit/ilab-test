@@ -4,7 +4,7 @@ from typing import Union
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
-from typing import Annotated
+from typing import Annotated, List
 
 # custom classes
 from database import engine, SessionLocal
@@ -68,3 +68,20 @@ async def ask_ai(
     db.commit()
     db.refresh(record)
     return record
+
+# history
+@app.get("/history", response_model=List[prompt.PromptOut])
+def get_history(db: db_dependency, user: user_dependancey):
+    prompts = (
+        db.query(models.Prompt)
+        .filter(models.Prompt.user_id == user['id'])
+        .order_by(models.Prompt.timestamp.desc())
+        .all()
+    )
+    return prompts
+
+# analytics
+@app.get("/analytics")
+def analytics(db: db_dependency, user:user_dependancey):
+    total = db.query(models.Prompt).filter(models.Prompt.user_id == user['id']).count()
+    return {"total_requests": total}
